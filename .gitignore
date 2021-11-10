@@ -45,5 +45,5 @@ reports
 logs
 
 # Do not include html in git
-.html
+*.html
 
