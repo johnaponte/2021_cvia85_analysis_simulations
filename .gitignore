@@ -39,7 +39,11 @@ vignettes/*.pdf
 .Renviron
 
 
-config.yml 
-database 
-reports 
-logs 
+config.yml
+database
+reports
+logs
+
+# Do not include html in git
+.html
+
