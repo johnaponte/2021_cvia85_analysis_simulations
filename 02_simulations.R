@@ -78,15 +78,102 @@ library(plyr)
 library(tidyverse)
 library(copula)
 options(knitr.duplicate.label = "allow")
+# helper functions and values
+to_mu <- function(shape1,shape2){shape1/(shape1+shape2)}
+to_phi <- function(shape1,shape2){shape1 + shape2}
+to_shape1 <- function(mu,phi){mu*phi}
+to_shape2 <- function(mu,phi){phi*(1-mu)}
+to_odds <- function(p){p/(1-p)}
+to_p <- function(odds){odds/(1+odds)}
 
 #'
 #' ## Analysis
 #'
 #+ echo = T
 
+#Simulate one trial
+#
+# @param mu mean probability for mosquito infection (assay0 day0)
+# @param phi precision parameter for the mosquito infection
+# @param nsubjects number of subjects to be simulated
+# @param nmosquitoes number of mosquitoes that start assays
+# @param mosq_mort_low lower limit of mosquito mortality
+# @param mosq_mort_upper upper limit of mosquito mortality
+# @param day_OR Odds Ratio of $day_1/day_2$
+# @param assay_OR Odds Ratio of $assay_1/assay_0$
+# @param day_corr Correlation between $day_1$ and $day_0$
+# @import copula
+# @import magrittr
+# @import tibble
+# @return a tibble with the number of positive and total surviving mosquitoes by
+# assay and day, with one row per subject
+simul_one <- function(
+  mu,
+  phi,
+  nsubjects,
+  nmosquitoes,
+  mosq_mort_low,
+  mosq_mort_high,
+  day_OR,
+  assay_OR,
+  day_corr
+){
 
+  # Step 1: Simulate the prior mosquito survival probability
+  priorp <- runif(nsubjects, min = 1-mosq_mort_high, max = 1-mosq_mort_low)
 
+  # Step 2: Simulate the surviving mosquitoes in a matrix nsubjects x 4
+  mosq <- matrix(
+    rbinom(nsubjects*4, nmosquitoes, priorp),
+     ncol = 4,
+     byrow = F,
+     dimnames = list(1:nsubjects,c("mosq_a0_d0", "mosq_a1_d0", "mosq_a0_d1", "mosq_a1_d1")))
 
+  # Step 3: Estimate mu parameters for the different assays
+  a0_d0 <- mu
+  a0_d1 <- to_p(to_odds(mu)*day_OR)
+  a1_d0 <- to_p(to_odds(mu)*assay_OR)
+  a1_d1 <- to_p(to_odds(mu)*day_OR *assay_OR)
+
+  # Step 4: Create the copula between days according to the correlation
+  betacopula <- mvdc(
+    copula = normalCopula(
+      param = c(1, day_corr, day_corr, day_corr,day_corr,1),
+      dim = 4,
+      dispstr = "un"
+    ),
+    margins = c("beta", "beta","beta","beta"),
+    paramMargins = list(
+      list(shape1 = to_shape1(a0_d0,phi), shape2 = to_shape2(a0_d0,phi)),
+      list(shape1 = to_shape1(a1_d0,phi), shape2 = to_shape2(a1_d0,phi)),
+      list(shape1 = to_shape1(a0_d1,phi), shape2 = to_shape2(a0_d1,phi)),
+      list(shape1 = to_shape1(a1_d1,phi), shape2 = to_shape2(a1_d0,phi))
+    )
+  )
+
+  #' Step 5: Simulate the probability of infection by subject and assay in a matrix
+  pinfection <- rMvdc(nsubjects, betacopula)
+  infected <- matrix(
+    rbinom(nsubjects*4, mosq,pinfection),
+    ncol = 4,
+    byrow = F,
+    dimnames = list(1:nsubjects,c("inf_a0_d0", "inf_a1_d0", "inf_a0_d1", "inf_a1_d1")))
+
+  #' Step 6: Return a tibble with the simulated infected and surviving mosquitoes
+  as_tibble(cbind(infected,mosq))
+ }
+
+simul_one(
+mu = 0.1685,
+phi = 5.1535,
+nsubjects = 30,
+nmosquitoes = 30,
+mosq_mort_high = .80,
+mosq_mort_low = .20,
+day_OR = 0.9,
+assay_OR = 0.5,
+day_corr = 0.5
+)
 
 #'
 #' ## Session Info
