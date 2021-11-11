@@ -78,6 +78,10 @@ library(plyr)
 library(tidyverse)
 library(copula)
 options(knitr.duplicate.label = "allow")
+
+# if true run the simulation
+simulate = TRUE
+
 # helper functions and values
 to_mu <- function(shape1,shape2){shape1/(shape1+shape2)}
 to_phi <- function(shape1,shape2){shape1 + shape2}
@@ -180,6 +184,7 @@ sim_matrix <-
   ) %>%
   mutate(idsim = 1:n())
 
+if (simulate) {
 # Perform the simulation
 set.seed(23456)
 simulation <-
@@ -214,7 +219,7 @@ simulation <-
 save(simul_one, file = "database/simul_one.rda")
 saveRDS(sim_matrix, file = "database/sim_matrix.rds")
 saveRDS(simulation, file = "database/simulation.rds")
-
+}
 
 #'
 #' ## Session Info
