@@ -136,6 +136,7 @@ simul_one <- function(
   a1_d1 <- to_p(to_odds(mu)*day_OR *assay_OR)
 
   # Step 4: Create the copula between days according to the correlation
+  # In R, beta distribution is simulated in shape1, shape2 parametrisation
   betacopula <- mvdc(
     copula = normalCopula(
       param = c(1, day_corr, day_corr, day_corr,day_corr,1),
@@ -163,17 +164,57 @@ simul_one <- function(
   as_tibble(cbind(infected,mosq))
  }
 
-simul_one(
-mu = 0.1685,
-phi = 5.1535,
-nsubjects = 30,
-nmosquitoes = 30,
-mosq_mort_high = .80,
-mosq_mort_low = .20,
-day_OR = 0.9,
-assay_OR = 0.5,
-day_corr = 0.5
-)
+# Define the simulation matrix
+sim_matrix <-
+  expand.grid(
+    mu = 0.1685,
+    phi = 5.1535,
+    nsubjects = c(30,1000),
+    nmosquitoes =30,
+    mosq_mort_high = .80,
+    mosq_mort_low = .20,
+    day_OR = c(0.1, 1, by = 0.1),
+    assay_OR = c(0.1, 1 , by = 0.1),
+    day_corr = c(0 , 1 , by = 0.1),
+    nsimul = 10000
+  ) %>%
+  mutate(idsim = 1:n())
+
+# Perform the simulation
+set.seed(23456)
+simulation <-
+  sim_matrix %>%
+  ddply(
+    .(idsim),
+    .progress = "text",
+    function(x){
+      adply(
+        c(1:x$nsimul),
+        .id = "idtrial",
+        .margins = 1,
+        function(y){
+          simul_one(
+            mu = x$mu,
+            phi = x$phi,
+            nsubjects = x$nsubject,
+            nmosquitoes = x$nmosquitoes,
+            mosq_mort_high = x$mosq_mort_high,
+            mosq_mort_low = x$mosq_mort_low,
+            day_OR = x$day_OR,
+            assay_OR = x$assay_OR,
+            day_corr = x$day_corr
+          )
+
+        }
+      )
+    }
+  )
+
+# Save the simulation for further analysis
+save(simul_one, file = "database/simul_one.rda")
+saveRDS(sim_matrix, file = "database/sim_matrix.rds")
+saveRDS(simulation, file = "database/simulation.rds")
+
 
 #'
 #' ## Session Info
