@@ -78,7 +78,7 @@ library(plyr)
 library(tidyverse)
 library(copula)
 options(knitr.duplicate.label = "allow")
-
+con <- get_con()
 # if true run the simulation
 simulate = TRUE
 
@@ -184,16 +184,17 @@ sim_matrix <-
   ) %>%
   mutate(idsim = 1:n())
 
+update_table(con,sim_matrix,format(date()))
+
 if (simulate) {
 # Perform the simulation
 set.seed(23456)
-simulation <-
-  sim_matrix %>%
-  ddply(
+sim_matrix %>%
+  d_ply(
     .(idsim),
     .progress = "text",
     function(x){
-      adply(
+      sdf <- adply(
         c(1:x$nsimul),
         .id = "idtrial",
         .margins = 1,
@@ -209,17 +210,17 @@ simulation <-
             assay_OR = x$assay_OR,
             day_corr = x$day_corr
           )
-
         }
       )
+      tblname <- paste0("S_", formatC(x$idsim,width = 4, format = "d", flag = "0"))
+      update_table(con, sdf, format(date()),tablename = tblname)
     }
   )
 
 # Save the simulation for further analysis
 save(simul_one, file = "database/simul_one.rda")
-saveRDS(sim_matrix, file = "database/sim_matrix.rds")
-saveRDS(simulation, file = "database/simulation.rds")
 }
+dbDisconnect(con)
 
 #'
 #' ## Session Info
