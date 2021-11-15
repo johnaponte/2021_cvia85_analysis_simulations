@@ -60,8 +60,8 @@ uwt <-
       ana_summary <-
         ddply(
           dba,
+          .(idtrial),
           function(y){
-            cat(".")
             plist <-
               list(
             #d_a0_d1-d_a0_d0
