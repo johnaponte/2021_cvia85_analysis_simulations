@@ -45,16 +45,23 @@ library(weights)
 options(knitr.duplicate.label = "allow")
 con <- get_con()
 
+
+#'
+#' ## Analysis
+#'
+#+ echo = T
+
 # Load the simulation matrix
 sim_matrix <- dbReadTable(con,"sim_matrix")
 
-# Unweighted t-test
-uwt <-
+
+# Unweighted t-test ####
+utt <-
   sim_matrix %>%
   ddply(
     .(idsim),
     function(x){
-      cat("idsim: ",x$idsim,"\n")
+      cat("u idsim: ",x$idsim,"\n")
       tblname <- paste0("S_", formatC(x$idsim,width = 4, format = "d", flag = "0"))
       dba <- dbReadTable(con, tblname)
       ana_summary <-
@@ -62,36 +69,98 @@ uwt <-
           dba,
           .(idtrial),
           function(y){
+            cat("u", x$idsim, y$idtrial[1],"\n")
             plist <-
               list(
-            #d_a0_d1-d_a0_d0
-            "d_a0_d" = (y$inf_a0_d1/y$mosq_a0_d1) - (y$inf_a0_d0/y$mosq_a0_d0),
-            #d_a1_d1-d_a1_d0
-            "d_a1_d" = (y$inf_a1_d1/y$mosq_a1_d1) - (y$inf_a1_d0/y$mosq_a1_d0),
-            #d_a1_d0-d_a0_d0
-            "d_d0_a" = (y$inf_a1_d0/y$mosq_a1_d0) - (y$inf_a0_d0/y$mosq_a0_d0),
-            #d_a1_d1-d_a0_d1
-            "d_d1_a" = (y$inf_a1_d1/y$mosq_a1_d1) - (y$inf_a0_d0/y$mosq_a0_d1)
-            )
+                #d_a0_d1-d_a0_d0
+                "d_a0_d" = (y$inf_a0_d1/y$mosq_a0_d1) - (y$inf_a0_d0/y$mosq_a0_d0),
+                #d_a1_d1-d_a1_d0
+                "d_a1_d" = (y$inf_a1_d1/y$mosq_a1_d1) - (y$inf_a1_d0/y$mosq_a1_d0),
+                #d_a1_d0-d_a0_d0
+                "d_d0_a" = (y$inf_a1_d0/y$mosq_a1_d0) - (y$inf_a0_d0/y$mosq_a0_d0),
+                #d_a1_d1-d_a0_d1
+                "d_d1_a" = (y$inf_a1_d1/y$mosq_a1_d1) - (y$inf_a0_d0/y$mosq_a0_d1)
+              )
             res <-
               ldply(
                 plist,
                 function(z){
-                  t.test(x, mu = 0) %>% tidy()
+                  z <- z[is.finite(z)]
+
+                  t.test(z, mu = 0) %>% tidy()
                 }
               )
             res
           })
       ana_summary
     })
-#'
-#' ## Analysis
-#'
-#+ echo = T
 
+update_table(con, utt, "Unweighted ttest")
 
+# Weighted t-test ####
 
+tidy_wgt.t <- function(xx){
+  # tidy function to convert the results in a tibble
+  tibble(
+    estimate = xx$additional["Difference"],
+    statistics = xx$coefficients["t.value"],
+    p.value = xx$coefficients["p.value"],
+    parameter = xx$coefficients["df"] ,
+    conf.low = xx$additional["Difference"] - qt(0.975,df = xx$coefficients["df"])*xx$additional["Std. Err"],
+    conf_high = xx$additional["Difference"] + qt(0.975,df = xx$coefficients["df"])*xx$additional["Std. Err"],
+    method = xx$test,
+    alternative = "two.sided"
+  )}
 
+## Analysis of weighted t
+wtt <-
+  sim_matrix %>%
+  ddply(
+    .(idsim),
+    function(x){
+      cat("w idsim: ",x$idsim,"\n")
+      tblname <- paste0("S_", formatC(x$idsim,width = 4, format = "d", flag = "0"))
+      dba <- dbReadTable(con, tblname)
+      ana_summary <-
+        ddply(
+          dba,
+          .(idtrial),
+          function(y){
+            cat("w", x$idsim, y$idtrial[1],"\n")
+            pa0d0 <- (y$inf_a0_d0+1)/(y$mosq_a0_d0+2)
+            pa0d1 <- (y$inf_a0_d1+1)/(y$mosq_a0_d1+2)
+            pa1d0 <- (y$inf_a1_d0+1)/(y$mosq_a1_d0+2)
+            pa1d1 <- (y$inf_a1_d1+1)/(y$mosq_a1_d1+2)
+            d_a0_d <- pa0d1-pa0d0
+            w_a0_d <- 1/((pa0d1*(1-pa0d1))/(y$mosq_a0_d1+2) + (pa0d0*(1-pa0d0))/(y$mosq_a0_d0+2))
+
+            d_a1_d <- pa1d1-pa1d0
+            w_a1_d <- 1/((pa1d1*(1-pa1d1))/(y$mosq_a1_d1+2) + (pa1d0*(1-pa1d0))/(y$mosq_a1_d0+2))
+
+            d_d0_a <- pa1d0-pa0d0
+            w_d0_a <- 1/((pa1d0*(1-pa1d0))/(y$mosq_a1_d0+2) + (pa0d0*(1-pa0d0))/(y$mosq_a0_d0+2))
+
+            d_d1_a <- pa1d1-pa0d1
+            w_d1_a <- 1/((pa1d1*(1-pa1d1))/(y$mosq_a1_d1+2) + (pa0d0*(1-pa0d0))/(y$mosq_a0_d0+2))
+
+            res <-
+              wtd.t.test(d_a0_d, y=0,weight = w_a0_d) %>% tidy_wgt.t() %>%
+              bind_rows(
+                wtd.t.test(d_a1_d, y=0,weight = w_a1_d) %>% tidy_wgt.t()
+              ) %>%
+              bind_rows(
+                wtd.t.test(d_d0_a, y=0,weight = w_d0_a) %>% tidy_wgt.t()
+              ) %>%
+              bind_rows(
+                wtd.t.test(d_d1_a, y=0,weight = w_d1_a) %>% tidy_wgt.t()
+              ) %>%
+              mutate(".id" = c("d_a0_d","d_a1_d","d_d0_a","d_d1_a"))
+            res
+          })
+      ana_summary
+    })
+
+update_table(con, wtt, "Weighted ttest")
 
 #'
 #' ## Session Info
