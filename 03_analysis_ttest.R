@@ -162,6 +162,7 @@ wtt <-
 
 update_table(con, wtt, "Weighted ttest")
 
+dbDisconnect(con)
 #'
 #' ## Session Info
 #'
