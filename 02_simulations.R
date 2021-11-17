@@ -152,7 +152,7 @@ simul_one <- function(
       list(shape1 = to_shape1(a0_d0,phi), shape2 = to_shape2(a0_d0,phi)),
       list(shape1 = to_shape1(a1_d0,phi), shape2 = to_shape2(a1_d0,phi)),
       list(shape1 = to_shape1(a0_d1,phi), shape2 = to_shape2(a0_d1,phi)),
-      list(shape1 = to_shape1(a1_d1,phi), shape2 = to_shape2(a1_d0,phi))
+      list(shape1 = to_shape1(a1_d1,phi), shape2 = to_shape2(a1_d1,phi))
     )
   )
 
@@ -177,9 +177,9 @@ sim_matrix <-
     nmosquitoes =30,
     mosq_mort_high = .80,
     mosq_mort_low = .20,
-    day_OR = c(0.1, 1, by = 0.1),
-    assay_OR = c(0.1, 1 , by = 0.1),
-    day_corr = c(0 , 1 , by = 0.1),
+    day_OR = seq(0.2, 1, by = 0.2),
+    assay_OR = seq(0.2, 1 , by = 0.2),
+    day_corr = c(0,0.5,1),
     nsimul = 10000
   ) %>%
   mutate(idsim = 1:n())

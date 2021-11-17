@@ -79,7 +79,7 @@ utt <-
                 #d_a1_d0-d_a0_d0
                 "d_d0_a" = (y$inf_a1_d0/y$mosq_a1_d0) - (y$inf_a0_d0/y$mosq_a0_d0),
                 #d_a1_d1-d_a0_d1
-                "d_d1_a" = (y$inf_a1_d1/y$mosq_a1_d1) - (y$inf_a0_d0/y$mosq_a0_d1)
+                "d_d1_a" = (y$inf_a1_d1/y$mosq_a1_d1) - (y$inf_a0_d1/y$mosq_a0_d1)
               )
             res <-
               ldply(
