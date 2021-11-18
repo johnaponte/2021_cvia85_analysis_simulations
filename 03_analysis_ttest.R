@@ -141,7 +141,7 @@ wtt <-
             w_d0_a <- 1/((pa1d0*(1-pa1d0))/(y$mosq_a1_d0+2) + (pa0d0*(1-pa0d0))/(y$mosq_a0_d0+2))
 
             d_d1_a <- pa1d1-pa0d1
-            w_d1_a <- 1/((pa1d1*(1-pa1d1))/(y$mosq_a1_d1+2) + (pa0d0*(1-pa0d0))/(y$mosq_a0_d0+2))
+            w_d1_a <- 1/((pa1d1*(1-pa1d1))/(y$mosq_a1_d1+2) + (pa0d1*(1-pa0d1))/(y$mosq_a0_d1+2))
 
             res <-
               wtd.t.test(d_a0_d, y=0,weight = w_a0_d) %>% tidy_wgt.t() %>%
