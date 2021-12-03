@@ -109,7 +109,7 @@ pl1
 pl2
 dev.off()
 
-write_xlsx(summary_OR1, file = "reports/cvia_085_precision_analysis.xlsx")
+write_xlsx(summary_OR1, path = "reports/cvia_085_precision_analysis.xlsx")
 #' ## Discussion
 #'
 #' The precision of the difference between the proportion of infected mosquitoes
