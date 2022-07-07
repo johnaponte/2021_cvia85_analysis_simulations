@@ -20,6 +20,7 @@ library(repana)
 library(plyr)
 library(tidyverse)
 library(readr)
+library(gt)
 options(knitr.duplicate.label = "allow")
 
 #' Estimate the difference in proportions using the Agresti-Caffo CI
@@ -59,9 +60,9 @@ acprop <- function(a,b,c,d, id, level = 0.95){
     list(
     "id" = id,
     "pos1" = a,
-    "n1" = b,
+    "neg1" = b-a,
     "pos2" = c,
-    "n2" = d,
+    "neg2" = d-c,
     "p1"=p1,
     "p2"=p2,
     "dif"= p2-p1,
@@ -84,6 +85,13 @@ as.matrix.acprop <- function (x, ...){
     byrow = F,
     dimnames = list(x$id,names(x[c(2:lx)]))
   )
+}
+
+#' Convert to matrix an object acprop
+#' @export
+as.data.frame.acprop <- function (x, ...){
+  class(x)<-"list"
+  data.frame(x)
 }
 
 #' Print an acprop object
@@ -202,7 +210,7 @@ ggplot_forest <- function(
               aes(x=x, y= y, label = textx),
               nudge_y = 0.35,
               inherit.aes = F,
-              size = 3) +
+              size = 0.5) +
     scale_x_continuous(breaks = axisfg$invid,labels = axisfg$subjectid) +
     scale_y_continuous("Difference in prevalence",
                        breaks = c(-1,-0.5,-0.25,0,0.25,0.5,1),
@@ -225,66 +233,113 @@ ggplot_forest <- function(
 
 }
 
-xx <- readxl::read_excel("_data/cvia_085_test.xlsx") %>%
-  mutate(subjectid = seq(1,n()))
+
+cvia_085_optical <-
+  read.csv("_data/axl05.csv") %>%
+  `names<-`(., tolower(names(.)))
+
+ooc <-
+  cvia_085_optical %>%
+  select(usubjid, avisit, lbanmeth, npoc,nmoc) %>%
+  filter(nmoc >0) %>%
+  rename(pos = npoc) %>%
+  mutate(neg = nmoc-pos) %>%
+  mutate(am = tolower(paste(lbanmeth,avisit, sep="_"))) %>%
+  select(-nmoc, -lbanmeth, -avisit) %>%
+  pivot_wider( id_cols=usubjid, names_from = "am", values_from = c("pos","neg"))
+
+
+
 dmfa <-
   acprop(
-    xx$dmfa_fin_pos,
-    xx$dmfa_fin_pos+xx$dmfa_fin_neg,
-    xx$dmfa_bas_pos,
-    xx$dmfa_bas_pos+xx$dmfa_bas_neg,
-    xx$subjectid
+    ooc$pos_dmfa_baseline,
+    ooc$pos_dmfa_baseline+ ooc$neg_dmfa_baseline,
+    ooc$pos_dmfa_final,
+    ooc$pos_dmfa_final + ooc$neg_dmfa_final,
+    ooc$usubjid
   )
 dmfa_meta <- metainv(dmfa)
 
-
 dsfa <-
   acprop(
-    xx$dsfa_fin_pos,
-    xx$dsfa_fin_pos+xx$dsfa_fin_neg,
-    xx$dsfa_bas_pos,
-    xx$dsfa_bas_pos+xx$dsfa_bas_neg,
-    xx$subjectid
+    ooc$pos_dsfa_baseline,
+    ooc$pos_dsfa_baseline+ ooc$neg_dsfa_baseline,
+    ooc$pos_dsfa_final,
+    ooc$pos_dsfa_final + ooc$neg_dsfa_final,
+    ooc$usubjid
   )
 dsfa_meta <- metainv(dsfa)
 
-
 bas <-
   acprop(
-    xx$dsfa_bas_pos,
-    xx$dsfa_bas_pos+xx$dsfa_bas_neg,
-    xx$dmfa_bas_pos,
-    xx$dmfa_bas_pos+xx$dmfa_bas_neg,
-    xx$subjectid
+    ooc$pos_dmfa_baseline,
+    ooc$pos_dmfa_baseline+ ooc$neg_dmfa_baseline,
+    ooc$pos_dsfa_baseline,
+    ooc$pos_dsfa_baseline + ooc$neg_dsfa_baseline,
+    ooc$usubjid
   )
 bas_meta <- metainv(bas)
 
 fin <-
   acprop(
-    xx$dsfa_fin_pos,
-    xx$dsfa_fin_pos+xx$dsfa_fin_neg,
-    xx$dmfa_fin_pos,
-    xx$dmfa_fin_pos+xx$dmfa_fin_neg,
-    xx$subjectid
+    ooc$pos_dmfa_final,
+    ooc$pos_dmfa_final+ ooc$neg_dmfa_final,
+    ooc$pos_dsfa_final,
+    ooc$pos_dsfa_final + ooc$neg_dsfa_final,
+    ooc$usubjid
   )
 fin_meta <- metainv(fin)
 
 res<- rbind(
-  as.matrix(dmfa_meta),
   as.matrix(dsfa_meta),
+  as.matrix(dmfa_meta),
   as.matrix(bas_meta),
   as.matrix(fin_meta)
 )
 
-row.names(res)<- c("DMFA","DSFA","BASELINE","FINAL")
-res
+resdf <-
+  data.frame(res) %>%
+  mutate(results = c("DSFA Final vs Baseline","DMFA Final vs Baseline","Baseline DSFA vs DMFA","Final DSFA vs DMFA") ) %>%
+  select(results, everything()) %>%
+  rename(pvalue = prob....z.) %>%
+  rename(qpvalue = prob...Q) %>%
+  rename(i2 = I2....) %>%
+  rename(q = Q) %>%
+  mutate(pvalue = format.pval(pvalue,3,0.001)) %>%
+  mutate(qpvalue = format.pval(qpvalue,3,0.001))
 
-ggplot_forest(dmfa, "Using inverse meta-analysis")
-#
-# ggplot_forest(dmfa, "DMFA (Final - Baseline)")
-# ggplot_forest(dsfa, "DSFA (Final - Baseline)")
-# ggplot_forest(bas, " Baseline (DSFA - DMFA)")
-# ggplot_forest(dmfa, "Final (DSFA - DMFA)")
+gt(resdf %>% select(-var,-z)) %>%
+  tab_header("Table 11 Summary of combined estimations for OOcyst prevalence (Optical microscopy)(Full Analysis Population)") %>%
+  fmt_number(
+    columns = c("dif","lci","uci"),
+    decimals = 3
+  ) %>%
+  fmt_number(
+    columns = "i2",
+    decimals = 1
+  ) %>%
+  fmt_number(
+    columns = "cv",
+    decimals = 2
+  ) %>%
+  cols_label(
+    results = "Comparison",
+    dif = "Combined\nEstimate",
+    lci = "LCI",
+    uci = "UCI",
+    pvalue = "p_value",
+    q = "Q Test",
+    qpvalue = "Q Test\n p_value",
+    i2 = "I2 (%)",
+    cv = "CV"
+  ) %>%
+  cols_align("right")
+
+
+ggplot_forest(dsfa, "DSFA (Final - Baseline)")
+ggplot_forest(dmfa, "DMFA (Final - Baseline)")
+ggplot_forest(bas, " Baseline (DSFA - DMFA)")
+ggplot_forest(dmfa, "Final (DSFA - DMFA)")
 
 #'
 #' ## Analysis
